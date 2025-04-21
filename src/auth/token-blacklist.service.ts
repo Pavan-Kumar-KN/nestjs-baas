@@ -11,21 +11,33 @@ export class TokenBlacklistService {
 
   async blacklistToken(token: string): Promise<void> {
     try {
-      // Decode the token to get the expiration time
+      // Decode the token to get the user ID
       const decoded = this.jwtService.decode(token);
-      if (!decoded || typeof decoded === 'string' || !decoded.exp) {
+      if (!decoded || typeof decoded === 'string' || !decoded.sub) {
         throw new Error('Invalid token');
       }
 
-      const expiresAt = new Date(decoded.exp * 1000); // Convert from seconds to milliseconds
+      const userId = decoded.sub;
 
-      // Store the token in the blacklist
-      await this.prisma.blacklistedToken.create({
-        data: {
-          token,
-          expiresAt,
-        },
+      // Get the user
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
       });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // If this token is the current access token, remove it
+      if (user.accessTokens === token) {
+        // Update the user to remove the token
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            accessTokens: null,
+          },
+        });
+      }
     } catch (error) {
       console.error('Error blacklisting token:', error);
       throw error;
@@ -34,29 +46,51 @@ export class TokenBlacklistService {
 
   async isBlacklisted(token: string): Promise<boolean> {
     try {
-      const blacklistedToken = await this.prisma.blacklistedToken.findUnique({
-        where: { token },
+      // Try to verify the token first
+      try {
+        this.jwtService.verify(token);
+      } catch (verifyError) {
+        console.error('Token verification failed:', verifyError.message);
+        return true; // Invalid tokens are considered blacklisted
+      }
+
+      // Decode the token to get the user ID
+      const decoded = this.jwtService.decode(token);
+      if (!decoded || typeof decoded === 'string' || !decoded.sub) {
+        console.error('Token decoding failed or missing sub claim');
+        return true; // Invalid tokens are considered blacklisted
+      }
+
+      const userId = decoded.sub;
+      console.log('Token user ID:', userId);
+
+      // Get the user
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
       });
 
-      return !!blacklistedToken;
+      if (!user) {
+        console.error('User not found for token');
+        return true; // User not found
+      }
+
+      console.log('User access token:', user.accessTokens ? 'exists' : 'null');
+
+      // Check if the token is still the user's accessToken
+      // In our implementation, accessTokens stores the current token directly
+      const isBlacklisted = user.accessTokens !== token;
+      console.log('Is token blacklisted (not matching stored token):', isBlacklisted);
+
+      return isBlacklisted;
     } catch (error) {
       console.error('Error checking blacklisted token:', error);
-      return false;
+      return true; // Consider as blacklisted on error
     }
   }
 
-  // Cleanup expired tokens (can be called periodically)
+  // No need for cleanup as tokens are stored in the user model
   async cleanupExpiredTokens(): Promise<void> {
-    try {
-      await this.prisma.blacklistedToken.deleteMany({
-        where: {
-          expiresAt: {
-            lt: new Date(),
-          },
-        },
-      });
-    } catch (error) {
-      console.error('Error cleaning up expired tokens:', error);
-    }
+    // No operation needed as we're not using a separate blacklist table
+    return;
   }
 }

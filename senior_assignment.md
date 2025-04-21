@@ -35,12 +35,13 @@ model User {
 ### User Roles:
 
 1. **ADMIN** - Full access to the system.
-2. **EMPLOYEE/STAFF** - Access depends on their department.
+2. **EMPLOYEE/STAFF** - Access depends on their department .
 3. **CUSTOMER** - Limited access.
 
 ### Employee Access Rules:
 
 - Access depends on the department (e.g., Sales, Engineering).
+- Sales can view the data of the engineering data but they can't able to update the records
 - Can only view data from other departments.
 - Can access specific content for their own department.
 
