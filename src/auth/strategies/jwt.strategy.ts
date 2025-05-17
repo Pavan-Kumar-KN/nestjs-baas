@@ -22,13 +22,46 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: number; email: string }) {
-    const user = await this.usersService.findById(payload.sub);
+  async validate(payload: any) {
+    try {
+      console.log('JWT payload:', JSON.stringify(payload, null, 2));
 
-    if (!user) {
+      // We don't need to check the blacklist here since we're using the User model approach
+      // The token validation is already done by Passport before this method is called
+
+      // Get user from database
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) {
+        console.error('User not found for token payload');
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      console.log('User found:', user.username);
+      console.log('User type:', user.userType);
+      console.log('Payload permissions:', payload.permissions || []);
+
+      // Create user object with permissions from the token
+      const userWithPermissions = {
+        ...user,
+        permissions: payload.permissions || [],
+        role: payload.role,
+        userType: payload.userType,
+        departmentId: payload.department,
+        organizationId: payload.organization,
+      };
+
+      console.log('User with permissions:', JSON.stringify({
+        id: userWithPermissions.id,
+        username: userWithPermissions.username,
+        userType: userWithPermissions.userType,
+        role: userWithPermissions.role,
+        permissions: userWithPermissions.permissions,
+      }, null, 2));
+
+      return userWithPermissions;
+    } catch (error) {
+      console.error('Error in JWT strategy validate:', error);
       throw new UnauthorizedException('Invalid token');
     }
-
-    return user;
   }
 }

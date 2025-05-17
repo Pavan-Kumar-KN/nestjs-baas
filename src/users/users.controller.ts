@@ -4,6 +4,7 @@ import { JwtBlacklistGuard } from '../auth/guards/jwt-blacklist.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { Request } from 'express';
 
 @Controller('users')
 export class UsersController {
@@ -14,19 +15,19 @@ export class UsersController {
 
   @UseGuards(JwtBlacklistGuard)
   @Get('profile')
-  getProfile(@Req() req) {
+  getProfile(@Req() req: Request & { user: { userId: string } }) {
     return this.usersService.findById(req.user.userId);
   }
 
   @UseGuards(JwtBlacklistGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.usersService.findById(+id);
+    return this.usersService.findById(id);
   }
 
   @UseGuards(JwtBlacklistGuard)
   @Patch('profile')
-  async updateProfile(@Req() req, @Body() updateUserDto: UpdateUserDto) {
+  async updateProfile(@Req() req: Request & { user: { userId: string } }, @Body() updateUserDto: UpdateUserDto) {
     const userId = req.user.userId;
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 

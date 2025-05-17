@@ -1,54 +1,230 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
-} 
+}
+
+generator seed {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+
+enum UserType {
+  ADMIN
+  EMPLOYEE
+  GUEST
+}
+
+// Enhanced schema with company model and proper relationships
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now()) @map("created_at") 
-  updatedAt DateTime @updatedAt @map("updated_at")
-  refreshTokens RefreshToken[]
-  accessTokens AccessToken[]
+  id              String           @id @default(uuid())
+  username        String           @unique
+  email           String?          @unique
+  password        String
+  refreshTokens   String?
+  accessTokens    String?
+  userType        UserType         @default(GUEST)
 
-  @@map("users")
+  // All users will be here
+  admin           Admin?
+  employee        Employee?
+  clientUsers     ClientUser[]
+
+  // Permissions
+  userPermissions UserPermission[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
-model BlacklistedToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  createdAt DateTime @default(now()) @map("created_at")
+// All the employees will be here
+model Employee {
+  id           String     @id @default(uuid())
 
-  @@map("blacklisted_tokens")
+  name       String
+  email      String     @unique
+  username String    @unique
+  password   String
+
+  user         User       @relation(fields: [userId], references: [id])
+  userId       String     @unique
+  role         Role       @relation(fields: [roleId], references: [id])
+  roleId       String
+  department   Department @relation(fields: [departmentId], references: [id])
+  departmentId String
+  title        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
-model RefreshToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  revoked   Boolean  @default(false)
-
-  @@map("refresh_tokens")
+// Admin
+model Admin {
+  id          String       @id @default(uuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id])
+  role        Role         @relation(fields: [roleId], references: [id])
+  roleId      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
-model AccessToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
+// Client
+model Client {
+  id          String       @id @default(uuid())
+  name        String
+  email       String       @unique
+  phone       String?
+  address     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  @@map("access_tokens")
+  // relations
+  clientUsers  ClientUser[]
 }
+
+model ClientUser {
+  id          String       @id @default(uuid())
+  clientId    String
+  userId      String
+  client      Client       @relation(fields: [clientId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([clientId, userId])
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique // e.g., ADMIN, EMPLOYEE, GUEST
+  description String?
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  permissions Permission[]
+  employees   Employee[]
+  admins      Admin[]
+  // users       User[]       // Added relation to User
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  key             String           @unique // e.g., "resource:read", "resource:write"
+  description     String?
+  roles           Role[]
+  departments     Department[]
+  userPermissions UserPermission[]
+  resourceType    ResourceType?    @relation(fields: [resourceTypeId], references: [id])
+  resourceTypeId  String?
+}
+
+model UserPermission {
+  id           String   @id @default(uuid())
+  userId       String
+  permissionId String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([userId, permissionId])
+}
+
+model Organization {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  departments Department[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Department {
+  id              String       @id @default(uuid())
+  name            String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String       // Renamed from companyId to match the relation
+  employees       Employee[]
+  permissions     Permission[]
+  roles           Role[]
+
+  @@unique([name, organizationId])
+}
+
+model ResourceType {
+  id          String       @id @default(uuid())
+  name        String       @unique // e.g., "order", "product", "inventory"
+  description String?
+  permissions Permission[]
+  resources   Resource[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Resource {
+  id             String       @id @default(uuid())
+  name           String
+  description    String?
+  resourceTypeId String       // Foreign key to ResourceType
+  resourceType   ResourceType @relation(fields: [resourceTypeId], references: [id])
+  metadata       Json?        // Flexible field for additional data
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+
+// ! Version 1
+// model User {
+//   id            Int       @id @default(autoincrement())
+//   email         String    @unique
+//   password      String
+//   createdAt     DateTime  @default(now()) @map("created_at")
+//   updatedAt     DateTime  @updatedAt @map("updated_at")
+//   refreshTokens String
+//   accessTokens  String
+//   // This two attributes will store the logged in time and logged out time
+//   lastLoggedIn  DateTime?
+//   lastLoggedOut DateTime?
+//   // * This attribute will store the role of the user
+//   role          String    @default("user")
+//   // * This attribute will store the status of the user
+
+//   @@map("users")
+// }
+
+// model BlacklistedToken {
+//   id        Int      @id @default(autoincrement())
+//   token     String   @unique
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@map("blacklisted_tokens")
+// }
+
+// model RefreshToken {
+//   id        Int      @id @default(autoincrement())
+//   token     String   @unique
+//   userId    Int
+//   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   expiresAt DateTime @map("expires_at")
+//   createdAt DateTime @default(now()) @map("created_at")
+//   revoked   Boolean  @default(false)
+
+//   @@map("refresh_tokens")
+// }
+
+// model AccessToken {
+//   id        Int      @id @default(autoincrement())
+//   token     String   @unique
+//   userId    Int
+//   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   expiresAt DateTime @map("expires_at")
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@map("access_tokens")
+// }
