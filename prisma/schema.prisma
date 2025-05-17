@@ -44,7 +44,12 @@ model User {
 // All the employees will be here
 model Employee {
   id           String     @id @default(uuid())
-  
+
+  name       String
+  email      String     @unique
+  username String    @unique
+  password   String
+
   user         User       @relation(fields: [userId], references: [id])
   userId       String     @unique
   role         Role       @relation(fields: [roleId], references: [id])
